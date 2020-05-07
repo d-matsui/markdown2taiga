@@ -8,9 +8,7 @@ import re
 
 
 def init_taiga_api():
-    api = TaigaAPI(
-        host='https://dmti.net'
-    )
+    api = TaigaAPI()
     print('Username or email: ', end='')
     username = input()
     password = getpass('Password: ')
