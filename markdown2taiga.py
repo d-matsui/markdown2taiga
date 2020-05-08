@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 
-from taiga import TaigaAPI
-from collections import deque
-from getpass import getpass
 import sys
 import re
+from taiga import TaigaAPI
+from collections import deque, defaultdict
+from configparser import ConfigParser
+from prompt_toolkit import prompt
+from pprint import pprint
 
 
-def init_taiga_api():
-    api = TaigaAPI()
-    print('Username or email: ', end='')
-    username = input()
-    password = getpass('Password: ')
+def init_taiga_api(host, username, password):
+    api = TaigaAPI(
+        host=host
+    )
     api.auth(
         username=username,
         password=password
@@ -49,44 +50,68 @@ def get_linums(lines, target_level):
     return linums
 
 
-def create_us_and_task(project, lines, linums_us, level_task):
-    for index_us, linum_us in enumerate(linums_us):
-        us_title = lines[linum_us].strip('#').strip()
-        us = project.add_user_story(us_title)
+def create_us_list(lines, level):
+    us_list = []
+    linums_us = get_linums(lines, level)
+    for idx, linum in enumerate(linums_us):
+        us = defaultdict()
+        us['title'] = lines[linum].strip('#').strip()
+        linum_next = linums_us[idx + 1] if not idx == len(linums_us) - 1 else -1
+        lines_descoped = lines[linum:linum_next]
+        us['task_list'] = create_task_list(lines_descoped, level + 1)
+        us_list.append(us)
+    return us_list
 
-        linums_task = []
-        if index_us == len(linums_us) - 1:
-            linums_task = get_linums(lines[linum_us:], level_task)
-        else:
-            linum_us_next = linums_us[index_us + 1]
-            linums_task = get_linums(lines[linum_us:linum_us_next], level_task)
 
-        for index_task, linum_task in enumerate(linums_task):
-            task_title = lines[linum_task].strip('#').strip()
-            task_desc = ''
-            if index_task == len(linums_task) - 1:
-                task_desc = ''.join(lines[linum_task + 1:])
-            else:
-                linum_task_next = linums_task[index_task + 1]
-                task_desc = ''.join(lines[linum_task + 1:linum_task_next])
-            us.add_task(
+def create_task_list(lines, level):
+    task_list = []
+    linums_task = get_linums(lines, level)
+    for idx, linum in enumerate(linums_task):
+        task = defaultdict()
+        task['title'] = lines[linum].strip('#').strip()
+        linum_next = linums_task[idx+1] if not idx == len(linums_task) - 1 else -1
+        task['desc'] = ''.join(lines[linum + 1:linum_next])
+        task_list.append(task)
+    return task_list
+
+
+def add_us_to_project(us_list, project):
+    for us in us_list:
+        us_title = us['title']
+        if not dialog(us):
+            continue
+        us_obj = project.add_user_story(us_title)
+        for task in us['task_list']:
+            task_title = task['title']
+            us_obj.add_task(
                 task_title,
                 project.task_statuses[0].id,
-                description=task_desc,
+                description=task['desc'],
             )
 
 
+def dialog(us):
+    print(f"\n- User Story: {us['title']}")
+    for task in us['task_list']:
+        print(f"    - Task: {task['title']}")
+    text = '\nDo you want to create this user story? (yes/no)'
+    return prompt(text)
+
+
 def main():
-    api = init_taiga_api()
-    project = api.projects.get_by_slug('taiga-test')
+    config_parser = ConfigParser()
+    config_parser.read('config.ini')
+    config = config_parser['default']
+
+    api = init_taiga_api(config.get('host'), config.get('username'), config.get('password'))
+    project = api.projects.get_by_slug(config.get('project_name'))
 
     filename = sys.argv[1]
     lines = readfile_as_array(filename)
-    min_level = calc_min_level(lines)
-    linums_us = get_linums(lines, min_level)
-    level_task = min_level + 1
+    level_us = calc_min_level(lines)
+    us_list = create_us_list(lines, level_us)
 
-    create_us_and_task(project, lines, linums_us, level_task)
+    add_us_to_project(us_list, project)
 
 
 if __name__ == '__main__':
