@@ -76,16 +76,19 @@ def create_task_list(lines, level):
 
 
 def add_us_to_project(us_list, project):
+    us_status = project.us_statuses.get(name='New').id
+    tag_name = 'team: dev'
+    us_tags = {tag_name: project.list_tags()[tag_name]}
     for us in us_list:
         us_title = us['title']
         if not dialog(us):
             continue
-        us_obj = project.add_user_story(us_title)
+        us_obj = project.add_user_story(us_title, status=us_status, tags=us_tags)
         for task in us['task_list']:
             task_title = task['title']
             us_obj.add_task(
                 task_title,
-                project.task_statuses[0].id,
+                project.task_statuses.get(name='New').id,
                 description=task['desc'],
             )
 
