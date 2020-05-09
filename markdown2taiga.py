@@ -50,12 +50,19 @@ def get_linums(lines, target_level):
     return linums
 
 
-def create_us_list(lines, level):
+def create_us_list(lines, level, project):
     us_list = []
+    status_name = 'New'
+    status = project.us_statuses.get(name=status_name).id
+    tag_name = 'team: dev'
+    tags = {tag_name: project.list_tags()[tag_name]}
+
     linums_us = get_linums(lines, level)
     for idx, linum in enumerate(linums_us):
         us = defaultdict()
         us['title'] = lines[linum].strip('#').strip()
+        us['status'] = status
+        us['tags'] = tags
         linum_next = linums_us[idx + 1] if not idx == len(linums_us) - 1 else -1
         lines_descoped = lines[linum:linum_next]
         us['task_list'] = create_task_list(lines_descoped, level + 1)
@@ -76,18 +83,13 @@ def create_task_list(lines, level):
 
 
 def add_us_to_project(us_list, project):
-    us_status = project.us_statuses.get(name='New').id
-    tag_name = 'team: dev'
-    us_tags = {tag_name: project.list_tags()[tag_name]}
     for us in us_list:
-        us_title = us['title']
         if not dialog(us):
             continue
-        us_obj = project.add_user_story(us_title, status=us_status, tags=us_tags)
+        us_obj = project.add_user_story(us['title'], status=us['status'], tags=us['tags'])
         for task in us['task_list']:
-            task_title = task['title']
             us_obj.add_task(
-                task_title,
+                task['title'],
                 project.task_statuses.get(name='New').id,
                 description=task['desc'],
             )
@@ -112,7 +114,7 @@ def main():
     filename = sys.argv[1]
     lines = readfile_as_array(filename)
     level_us = calc_min_level(lines)
-    us_list = create_us_list(lines, level_us)
+    us_list = create_us_list(lines, level_us, project)
 
     add_us_to_project(us_list, project)
 
