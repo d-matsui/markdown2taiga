@@ -1,1 +1,1 @@
-# markdown2taiga
+# md2taiga-cli
